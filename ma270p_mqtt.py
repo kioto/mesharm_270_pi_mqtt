@@ -4,7 +4,7 @@ import sys
 import paho.mqtt.client as mqtt
 import yaml
 from pymycobot.mycobot import MyCobot
-from pymycobot.genre import Angle
+from pymycobot.genre import Angle, Coord
 
 
 DEFAULT_CONFIG_FILE = './config.yaml'
@@ -57,6 +57,25 @@ class MeshArm270(object):
             val = Angle.J5.value
         elif id_str == 'J6':
             val = Angle.J6.value
+
+        return val
+
+    def _str_to_cid(self, id_str):
+        val = None
+        if id_str == 'x':
+            val = Coord.X.value
+        elif id_str == 'y':
+            val = Coord.Y.value
+        elif id_str == 'z':
+            val = Coord.Z.value
+        elif id_str == 'rx':
+            val = Coord.Rx.value
+        elif id_str == 'ry':
+            val = Coord.Ry.value
+        elif id_str == 'rz':
+            val = Coord.Rz.value
+        else:
+            print('Unknown: ' + id_str)
 
         return val
 
@@ -145,6 +164,12 @@ class MeshArm270(object):
                 result = 'error'
             else:
                 result = str(val)
+        elif cmd == 'send_coord':
+            cid = self._str_to_cid(params[1])
+            coord = float(params[2])
+            speed = int(params[3])
+            self._m.send_coord(cid, coord, speed)
+            result = 'OK'
         else:
             result = 'Unknown command: ' + cmd
 
