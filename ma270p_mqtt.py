@@ -135,6 +135,16 @@ class MeshArm270(object):
         elif cmd == 'get_coords':
             vals = self._m.get_coords()
             result = ','.join([str(val) for val in vals])
+        elif cmd == 'is_moving':
+            val = self._m.is_moving()
+            if val == 1:
+                result = 'moving'
+            elif val == 0:
+                result = 'not moving'
+            elif val == -1:
+                result = 'error'
+            else:
+                result = str(val)
         else:
             result = 'Unknown command: ' + cmd
 
@@ -223,6 +233,3 @@ if __name__ == '__main__':
     sub = MeshArmSubscriber(config, mesh_arm)
 
     sub.run()
-
-
-
