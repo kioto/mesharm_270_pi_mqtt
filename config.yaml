@@ -1,0 +1,6 @@
+broker:
+  host: 192.168.1.7
+  port: 1883
+topic:
+  mesharm_sub: "meshArm270PI/command"
+  mesharm_pub: "meshArm270PI/response"
