@@ -1,6 +1,8 @@
 """meshArm 270 PI MQTT interface driver
 """
 import sys
+import queue
+import threading
 import paho.mqtt.client as mqtt
 import yaml
 from pymycobot.mycobot import MyCobot
@@ -39,9 +41,10 @@ class MeshArm270(object):
     """meshArm 270 class
     """
 
-    def __init__(self, pub):
+    def __init__(self, pub, q):
         self._m = MyCobot(MESHARM_DRIVER_PORT, MESHARM_PORT_SPEED)
         self._pub = pub
+        self._queue = q
 
     def _str_to_id(self, id_str):
         val = None
@@ -79,7 +82,24 @@ class MeshArm270(object):
 
         return val
 
-    def call(self, params):
+    def run(self):
+        threading.Thread(target=self._worker, daemon=True).start()
+
+    def _worker(self):
+        while True:
+            if self._queue.empty() is False and self._is_busy() is False:
+                task = self._queue.get()
+                res = self._call(task)
+                while self._is_busy():
+                    # moving
+                    pass
+                self._queue.task_done()
+                self._pub.send(res)
+
+    def _is_busy(self):
+        return self._m.is_moving() == 1
+
+    def _call(self, params):
         cmd = params[0]
         result = ''
         if cmd == 'power_on':
@@ -135,7 +155,9 @@ class MeshArm270(object):
             jid = self._str_to_id(params[1])
             result = self._m.get_joint_max_angle(jid)
         elif cmd == 'get_angles':
-            angles = self._m.get_angles()
+            angles = []
+            while len(angles) == 0:
+                angles = self._m.get_angles()
             result = ','.join([str(val) for val in angles])
         elif cmd == 'send_angle':
             jid = self._str_to_id(params[1])
@@ -173,7 +195,7 @@ class MeshArm270(object):
         else:
             result = 'Unknown command: ' + cmd
 
-        self._pub.send(result)
+        return result
 
 
 class MeshArmMqtt(object):
@@ -216,9 +238,9 @@ class MeshArmSubscriber(MeshArmMqtt):
     """MQTT Subscriber
     """
 
-    def __init__(self, config, mesh_arm):
+    def __init__(self, config, q):
         super().__init__(config)
-        self._mesh_arm = mesh_arm
+        self._queue = q
         self._client = mqtt.Client()
         self._client.on_connect = self._on_connect
         self._client.on_disconnect = self._on_disconnect
@@ -236,7 +258,7 @@ class MeshArmSubscriber(MeshArmMqtt):
     def _on_message(self, client, userdata, msg):
         msg_str = msg.payload.decode('utf-8')
         print('[sub] Received message: ' + msg_str)
-        self._mesh_arm.call(msg_str.split(','))
+        self._queue.put(msg_str.split(','))
 
     def run(self):
         self._client.connect(self._config.host, self._config.port, 60)
@@ -253,8 +275,10 @@ if __name__ == '__main__':
         conf_obj = yaml.safe_load(f)
         config = Config(conf_obj)
 
+    q = queue.Queue()
     pub = MeshArmPublisher(config)
-    mesh_arm = MeshArm270(pub)
-    sub = MeshArmSubscriber(config, mesh_arm)
+    mesh_arm = MeshArm270(pub, q)
+    sub = MeshArmSubscriber(config, q)
+    mesh_arm.run()
 
     sub.run()
